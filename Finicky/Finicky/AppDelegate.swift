@@ -24,59 +24,59 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     static var defaultBrowser: String! = "com.google.Chrome"
 
-    func applicationDidFinishLaunching(aNotification: NSNotification) {
+    func applicationDidFinishLaunching(_ aNotification: Notification) {
         let bundleId = "net.kassett.Finicky"
-        LSSetDefaultHandlerForURLScheme("http", bundleId)
-        LSSetDefaultHandlerForURLScheme("https", bundleId)
+        LSSetDefaultHandlerForURLScheme("http" as CFString, bundleId as CFString)
+        LSSetDefaultHandlerForURLScheme("https" as CFString, bundleId as CFString)
 
         let img: NSImage! = NSImage(named: "statusitem")
-        img.template = true
+        img.isTemplate = true
 
-        let bar = NSStatusBar.systemStatusBar()
+        let bar = NSStatusBar.system()
         // Workaround for some bug: -1 instead of NSVariableStatusItemLength
-        statusItem = bar.statusItemWithLength(CGFloat(-1))
+        statusItem = bar.statusItem(withLength: CGFloat(-1))
         statusItem.menu = statusItemMenu
         statusItem.highlightMode = true
         statusItem.image = img
         toggleDockIcon(showIcon: false)
     }
 
-    @IBAction func reloadConfig(sender: NSMenuItem) {
+    @IBAction func reloadConfig(_ sender: NSMenuItem) {
         configLoader.reload()
     }
 
-    @IBAction func showAboutPanel(sender: NSMenuItem) {
+    @IBAction func showAboutPanel(_ sender: NSMenuItem) {
         NSApp.orderFrontStandardAboutPanel(sender)
     }
 
     func toggleDockIcon(showIcon state: Bool) -> Bool {
         var result: Bool
         if state {
-            result = NSApp.setActivationPolicy(NSApplicationActivationPolicy.Regular)
+            result = NSApp.setActivationPolicy(NSApplicationActivationPolicy.regular)
         }
         else {
-            result = NSApp.setActivationPolicy(NSApplicationActivationPolicy.Accessory)
+            result = NSApp.setActivationPolicy(NSApplicationActivationPolicy.accessory)
         }
         return result
     }
 
-    func handleGetURLEvent(event: NSAppleEventDescriptor?, withReplyEvent: NSAppleEventDescriptor?) {
-        let url : NSURL = NSURL(string: event!.paramDescriptorForKeyword(AEKeyword(keyDirectObject))!.stringValue!)!
-        let pid = event!.attributeDescriptorForKeyword(AEKeyword(keySenderPIDAttr))!.int32Value
+    func handleGetURLEvent(_ event: NSAppleEventDescriptor?, withReplyEvent: NSAppleEventDescriptor?) {
+        let url : URL = URL(string: event!.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))!.stringValue!)!
+        let pid = event!.attributeDescriptor(forKeyword: AEKeyword(keySenderPIDAttr))!.int32Value
         let sourceBundleIdentifier = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier
 
-        let callback = callUrlHandlers(sourceBundleIdentifier)
+        let callback = callUrlHandlers(sourceBundleIdentifier, <#URL#>)
 
         if shortUrlResolver.isShortUrl(url) {
             shortUrlResolver.resolveUrl(url, callback: callback)
         } else {
-            callback(url: url)
+            callback(url)
         }
     }
 
-    func getActiveApp(bundleIds: Array<String>) -> String {
+    func getActiveApp(_ bundleIds: Array<String>) -> String {
         for bundleId in bundleIds {
-            let apps = NSRunningApplication.runningApplicationsWithBundleIdentifier(bundleId)
+            let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
             if !apps.isEmpty {
                 let app : NSRunningApplication = apps[0]
                 let bundleIdentifier = app.bundleIdentifier
@@ -90,21 +90,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return bundleIds.first!
     }
 
-    func callUrlHandlers(sourceBundleIdentifier: String?)(url: NSURL) {
+    func callUrlHandlers(_ sourceBundleIdentifier: String?, _ url: URL) {
         let flags = getFlags()
         var bundleIdentifier : String! = AppDelegate.defaultBrowser
-        var newUrl : NSURL = url
+        var newUrl : URL = url
         var openInBackground : Bool? = nil
 
         let strategy = FinickyAPI.callUrlHandlers(newUrl, sourceBundleIdentifier: sourceBundleIdentifier, flags: flags)
         print("opening %@ from %@ as %@ in %@", url, bundleIdentifier, strategy["url"], strategy["bundleIdentifier"]);
         if strategy["url"] != nil {
-            newUrl = NSURL(string: strategy["url"]! as! String)!
+            newUrl = URL(string: strategy["url"]! as! String)!
 
             // If the bundle identifier is a string, open the url with that app. If it's an array, find the first running
             // app, and open the url with that. If none of the apps are running, use the first available one instead.
-            if let bundleId : String! = strategy["bundleIdentifier"] as? String! {
-                if bundleId != nil && !bundleId.isEmpty {
+            if let bundleId : String? = strategy["bundleIdentifier"] as? String! {
+                if bundleId != nil && !(bundleId?.isEmpty)! {
                     bundleIdentifier = strategy["bundleIdentifier"]! as! String
                 }
             } else if let bundleIds = strategy["bundleIdentifier"] as? Array<String>! {
@@ -121,10 +121,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func openUrlWithBrowser(url: NSURL, bundleIdentifier: String, openInBackground: Bool?) {
+    func openUrlWithBrowser(_ url: URL, bundleIdentifier: String, openInBackground: Bool?) {
         var eventDescriptor: NSAppleEventDescriptor? = NSAppleEventDescriptor()
         var errorInfo : NSDictionary? = nil
-        var appleEventManager:NSAppleEventManager = NSAppleEventManager.sharedAppleEventManager()
+        var appleEventManager:NSAppleEventManager = NSAppleEventManager.shared()
         let urls = [url]
 
         var launchInBackground = !isActive
@@ -133,18 +133,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if !launchInBackground {
-            NSWorkspace.sharedWorkspace().launchAppWithBundleIdentifier(
-                bundleIdentifier,
-                options: NSWorkspaceLaunchOptions.Default,
+            NSWorkspace.shared().launchApplication(
+                withBundleIdentifier: bundleIdentifier,
+                options: NSWorkspaceLaunchOptions.default,
                 additionalEventParamDescriptor: nil,
                 launchIdentifier: nil
             )
         }
 
-        NSWorkspace.sharedWorkspace().openURLs(
+        NSWorkspace.shared().open(
             urls,
             withAppBundleIdentifier: bundleIdentifier,
-            options: launchInBackground ? NSWorkspaceLaunchOptions.WithoutActivation : NSWorkspaceLaunchOptions.Default,
+            options: launchInBackground ? NSWorkspaceLaunchOptions.withoutActivation : NSWorkspaceLaunchOptions.default,
             additionalEventParamDescriptor: nil,
             launchIdentifiers: nil
         )
@@ -152,32 +152,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func getFlags() -> Dictionary<String, Bool> {
         return [
-            "cmd": NSEvent.modifierFlags().intersect(.CommandKeyMask) != [],
-            "ctrl": NSEvent.modifierFlags().intersect(.ControlKeyMask) != [],
-            "shift": NSEvent.modifierFlags().intersect(.ShiftKeyMask) != [],
-            "alt": NSEvent.modifierFlags().intersect(.AlternateKeyMask) != []
+            "cmd": NSEvent.modifierFlags().intersection(.command) != [],
+            "ctrl": NSEvent.modifierFlags().intersection(.control) != [],
+            "shift": NSEvent.modifierFlags().intersection(.shift) != [],
+            "alt": NSEvent.modifierFlags().intersection(.option) != []
         ]
     }
 
-    func application(sender: NSApplication, openFiles filenames: [String]) {
+    func application(_ sender: NSApplication, openFiles filenames: [String]) {
         for filename in filenames {
-            callUrlHandlers(nil)(url: NSURL(fileURLWithPath: filename ))
+            callUrlHandlers(nil, <#URL#>)(URL(fileURLWithPath: filename ))
         }
     }
 
-    func applicationWillFinishLaunching(aNotification: NSNotification) {
+    func applicationWillFinishLaunching(_ aNotification: Notification) {
         configLoader = FNConfigLoader()
         configLoader.reload()
         shortUrlResolver = FNShortUrlResolver()
-        let appleEventManager:NSAppleEventManager = NSAppleEventManager.sharedAppleEventManager()
-        appleEventManager.setEventHandler(self, andSelector: "handleGetURLEvent:withReplyEvent:", forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
+        let appleEventManager:NSAppleEventManager = NSAppleEventManager.shared()
+        appleEventManager.setEventHandler(self, andSelector: #selector(AppDelegate.handleGetURLEvent(_:withReplyEvent:)), forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
     }
 
-    func applicationDidBecomeActive(aNotification: NSNotification) {
+    func applicationDidBecomeActive(_ aNotification: Notification) {
         isActive = true
     }
 
-    func applicationDidResignActive(aNotification: NSNotification) {
+    func applicationDidResignActive(_ aNotification: Notification) {
         isActive = false
     }
 
